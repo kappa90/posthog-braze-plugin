@@ -1,21 +1,8 @@
-import { Plugin, PluginEvent, PluginMeta, Properties, RetryError } from '@posthog/plugin-scaffold'
-import crypto from 'crypto'
-import fetch, { RequestInit, Response } from 'node-fetch'
-
-
-export type FetchBraze = (
-    endpoint: string,
-    options: Partial<RequestInit>,
-    method: string,
-    requestId?: string
-) => Promise<Record<string, unknown> | null>
+import { Plugin, PluginEvent, PluginMeta, Properties, Webhook } from '@posthog/plugin-scaffold'
 
 type BooleanChoice = 'Yes' | 'No'
 
 type BrazePlugin = Plugin<{
-    global: {
-        fetchBraze: FetchBraze
-    }
     config: {
         brazeEndpoint: 'US-01' | 'US-02' | 'US-03' | 'US-04' | 'US-05' | 'US-06' | 'US-08' | 'EU-01' | 'EU-02'
         apiKey: string
@@ -45,59 +32,6 @@ const ENDPOINTS_MAP = {
     'US-08': 'https://rest.iad-08.braze.com',
     'EU-01': 'https://rest.fra-01.braze.eu',
     'EU-02': 'https://rest.fra-02.braze.eu',
-}
-
-export async function setupPlugin({ config, global }: BrazeMeta): Promise<void> {
-    const brazeUrl = ENDPOINTS_MAP[config.brazeEndpoint]
-    // we define a global fetch function that handles authentication and API errors
-    global.fetchBraze = async (endpoint, options = {}, method = 'GET', requestId = '') => {
-        const headers = {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${config.apiKey}`,
-        }
-
-        let response: Response | undefined
-
-        const startTime = Date.now()
-
-        try {
-            response = await fetch(`${brazeUrl}${endpoint}`, {
-                method,
-                headers,
-                ...options,
-                timeout: 5000,
-            })
-        } catch (e) {
-            console.error(e, endpoint, options.body, requestId)
-            throw new RetryError('Fetch failed, retrying.')
-        } finally {
-            const elapsedTime = (Date.now() - startTime) / 1000
-            if (elapsedTime >= 5) {
-                console.warn(
-                    `🐢 Slow request warning. Fetch took ${elapsedTime} seconds. Request ID: ${requestId}`,
-                    endpoint
-                )
-            }
-        }
-
-        if (String(response.status)[0] === '5') {
-            throw new RetryError(`Service is down, retry later. Request ID: ${requestId}`)
-        }
-
-        let responseJson: Record<string, unknown> | null = null
-
-        try {
-            responseJson = await response.json()
-        } catch (e) {
-            console.error('Error parsing Braze response as JSON: ', e, endpoint, options.body, requestId)
-        }
-
-        if (responseJson?.['errors']) {
-            console.error('Braze API error (not retried): ', responseJson, endpoint, options.body, requestId)
-        }
-        return responseJson
-    }
 }
 
 export function ISODateString(d: Date): string {
@@ -197,74 +131,24 @@ const _generateBrazeRequestBody = (pluginEvent: PluginEvent, meta: BrazeMeta): B
     }
 }
 
-export const exportEvents = async (pluginEvents: PluginEvent[], meta: BrazeMeta): Promise<void> => {
-    if (!pluginEvents.length) {
-        console.warn('Received `exportEvents` with no events.')
-        return
-    }
-
-    // NOTE: We compute a unique ID for this request so we can identify the same request in the logs
-    const requestId = crypto.createHash('sha256').update(JSON.stringify(pluginEvents)).digest('hex')
-    const startTime = Date.now()
-    let oldestEventTimestamp = Date.now()
-
-    const brazeRequestBodies = pluginEvents.map((pluginEvent) => {
-        if (pluginEvent.timestamp && new Date(pluginEvent.timestamp).getTime() < oldestEventTimestamp) {
-            oldestEventTimestamp = new Date(pluginEvent.timestamp).getTime()
-        }
-        return _generateBrazeRequestBody(pluginEvent, meta)
-    })
-
-    console.log(
-        `Braze plugin export, received ${pluginEvents.length} events. Exporting ${
-            brazeRequestBodies.length
-        } batches. Oldest event in this batch was received ${(Date.now() - oldestEventTimestamp) / 1000} seconds ago.`,
-        requestId
-    )
+export const composeWebhook = async (event: PluginEvent, meta: BrazeMeta): Promise<Webhook | null> => {
+    const brazeRequestBody = _generateBrazeRequestBody(event, meta)
 
     if (
-        brazeRequestBodies.length === 0 ||
-        brazeRequestBodies.every((body) => body.attributes.length === 0 && body.events.length === 0)
+        brazeRequestBody.attributes.length === 0 && brazeRequestBody.events.length === 0
     ) {
         return console.log('No events to export.')
     }
 
-    const batchSize = 75 // NOTE: https://www.braze.com/docs/api/endpoints/user_data/post_user_track/
-    const batchedBodies = brazeRequestBodies.reduce((acc, curr) => {
-        const { attributes, events } = curr
-        const lastBatch = acc[acc.length - 1]
-
-        if (attributes.length === 0 && events.length === 0) {
-            return acc
-        }
-
-        if (!lastBatch || lastBatch.attributes.length >= batchSize || lastBatch.events.length >= batchSize) {
-            acc.push({ attributes: [...attributes], events: [...events] })
-        } else {
-            lastBatch.attributes.push(...attributes)
-            lastBatch.events.push(...events)
-        }
-
-        return acc
-    }, [] as BrazeUsersTrackBody[])
-
-    const brazeRequests = batchedBodies.map((body, idx) =>
-        meta.global.fetchBraze(
-            '/users/track',
-            {
-                body: JSON.stringify(body),
-            },
-            'POST',
-            `${requestId}-${idx}`
-        )
-    )
-
-    // NOTE: Send all requests in parallel, error responses already handled and logged by fetchBraze
-    await Promise.all(brazeRequests)
-
-    const elapsedTime = (Date.now() - startTime) / 1000
-
-    if (elapsedTime >= 30) {
-        console.warn(`🐢🐢 Slow exportEvents warning. Export took ${elapsedTime} seconds.`)
+    const brazeUrl = ENDPOINTS_MAP[meta.config.brazeEndpoint]
+    return {
+        url: `${brazeUrl}/users/track`,
+        body: JSON.stringify(brazeRequestBody),
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${meta.config.apiKey}`,
+        },
+        method: 'POST',
     }
 }
