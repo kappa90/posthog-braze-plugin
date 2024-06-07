@@ -137,7 +137,7 @@ export const composeWebhook = async (event: PluginEvent, meta: BrazeMeta): Promi
     if (
         brazeRequestBody.attributes.length === 0 && brazeRequestBody.events.length === 0
     ) {
-        return console.log('No events to export.')
+        return console.log('Nothing to export, event is empty.')
     }
 
     const brazeUrl = ENDPOINTS_MAP[meta.config.brazeEndpoint]
