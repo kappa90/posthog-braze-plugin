@@ -87,30 +87,11 @@ test('composeWebhook sends $set attributes and events to Braze', async () => {
 
     expect(webhook).toBe({
         url: 'https://rest.iad-03.braze.com/users/track',
-        body: {
-            attributes: [
-                {
-                    email: 'test@posthog',
-                    name: 'Test User',
-                    external_id: 'test',
-                },
-            ],
-            events: [
-                {
-                    // NOTE: $set properties are filtered out
-                    properties: {
-                        is_a_demo_user: true,
-                    },
-                    external_id: 'test',
-                    name: 'account created',
-                    time: '2023-06-16T00:00:00.00Z',
-                },
-            ],
-        },
+        body: `{"attributes":[{"email":"test@posthog","name":"Test User","external_id":"test"}],"events":[{"properties":{"is_a_demo_user":true},"external_id":"test","name":"account created","time":"2023-06-16T00:00:00.00Z"}]}`,
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
-            Authorization: `Bearer `,
+            Authorization: `***`,
         },
         method: 'POST',
     })
@@ -146,24 +127,11 @@ test('composeWebhook user properties not sent', async () => {
 
     expect(webhook).toBe({
         url: 'https://rest.iad-01.braze.com/users/track',
-        body: {
-            attributes: [],
-            events: [
-                {
-                    // NOTE: $set properties are filtered out
-                    properties: {
-                        is_a_demo_user: true,
-                    },
-                    external_id: 'test',
-                    name: 'account created',
-                    time: '2023-06-16T00:00:00.00Z',
-                },
-            ],
-        },
+        body: `{"attributes":[],"events":[{"properties":{"is_a_demo_user":true},"external_id":"test","name":"account created","time":"2023-06-16T00:00:00.00Z"}]}`,
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
-            Authorization: `Bearer `,
+            Authorization: `***`,
         },
         method: 'POST',
     })
@@ -201,19 +169,11 @@ test('composeWebhook user properties are passed for $identify event even if $ide
 
     expect(webhook).toBe({
         url: 'https://rest.fra-01.braze.eu/users/track',
-        body: {
-            attributes: [
-                {
-                    email: 'test@posthog',
-                    external_id: 'test',
-                },
-            ],
-            events: [],
-        },
+        body: `{"attributes":[{"email":"test@posthog","external_id":"test"}],"events":[]}`,
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
-            Authorization: `Bearer `,
+            Authorization: `***`,
         },
         method: 'POST',
     })
