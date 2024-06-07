@@ -131,7 +131,7 @@ const _generateBrazeRequestBody = (pluginEvent: PluginEvent, meta: BrazeMeta): B
     }
 }
 
-export const composeWebhook = async (event: PluginEvent, meta: BrazeMeta): Promise<Webhook | null> => {
+export const composeWebhook = (event: PluginEvent, meta: BrazeMeta): Webhook | void => {
     const brazeRequestBody = _generateBrazeRequestBody(event, meta)
 
     if (
