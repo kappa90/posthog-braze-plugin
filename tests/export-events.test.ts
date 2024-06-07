@@ -85,13 +85,13 @@ test('composeWebhook sends $set attributes and events to Braze', async () => {
         meta
     )
 
-    expect(webhook).toBe({
+    expect(webhook).toStrictEqual({
         url: 'https://rest.iad-03.braze.com/users/track',
         body: `{"attributes":[{"email":"test@posthog","name":"Test User","external_id":"test"}],"events":[{"properties":{"is_a_demo_user":true},"external_id":"test","name":"account created","time":"2023-06-16T00:00:00.00Z"}]}`,
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
-            Authorization: `***`,
+            Authorization: `Bearer undefined`,
         },
         method: 'POST',
     })
@@ -125,13 +125,13 @@ test('composeWebhook user properties not sent', async () => {
         meta
     )
 
-    expect(webhook).toBe({
+    expect(webhook).toStrictEqual({
         url: 'https://rest.iad-01.braze.com/users/track',
         body: `{"attributes":[],"events":[{"properties":{"is_a_demo_user":true},"external_id":"test","name":"account created","time":"2023-06-16T00:00:00.00Z"}]}`,
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
-            Authorization: `***`,
+            Authorization: `Bearer undefined`,
         },
         method: 'POST',
     })
@@ -167,13 +167,13 @@ test('composeWebhook user properties are passed for $identify event even if $ide
         meta
     )
 
-    expect(webhook).toBe({
+    expect(webhook).toStrictEqual({
         url: 'https://rest.fra-01.braze.eu/users/track',
         body: `{"attributes":[{"email":"test@posthog","external_id":"test"}],"events":[]}`,
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
-            Authorization: `***`,
+            Authorization: `Bearer undefined`,
         },
         method: 'POST',
     })
