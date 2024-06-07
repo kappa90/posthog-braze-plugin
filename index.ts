@@ -1,4 +1,4 @@
-import { Plugin, PluginEvent, PluginMeta, Properties, Webhook } from '@posthog/plugin-scaffold'
+import { Plugin, PluginMeta, PostHogEvent, Properties, Webhook } from '@posthog/plugin-scaffold'
 
 type BooleanChoice = 'Yes' | 'No'
 
@@ -88,12 +88,12 @@ type BrazeUsersTrackBody = {
     events: Array<BrazeEvent> // NOTE: max length 75
 }
 
-const _generateBrazeRequestBody = (pluginEvent: PluginEvent, meta: BrazeMeta): BrazeUsersTrackBody => {
-    const { event, $set, properties, timestamp } = pluginEvent
+const _generateBrazeRequestBody = (pluginEvent: PostHogEvent, meta: BrazeMeta): BrazeUsersTrackBody => {
+    const { event, properties, timestamp } = pluginEvent
 
     // If we have $set or properties.$set then attributes should be an array
     // of one object. Otherwise it should be an empty array.
-    const userProperties: Properties = $set ?? properties?.$set ?? {}
+    const userProperties: Properties = properties?.$set ?? {}
     const propertiesToExport = meta.config.userPropertiesToExport?.split(',') ?? []
     const filteredProperties = Object.keys(userProperties).reduce((filtered, key) => {
         if (propertiesToExport.includes(key)) {
@@ -131,12 +131,10 @@ const _generateBrazeRequestBody = (pluginEvent: PluginEvent, meta: BrazeMeta): B
     }
 }
 
-export const composeWebhook = (event: PluginEvent, meta: BrazeMeta): Webhook | void => {
+export const composeWebhook = (event: PostHogEvent, meta: BrazeMeta): Webhook | void => {
     const brazeRequestBody = _generateBrazeRequestBody(event, meta)
 
-    if (
-        brazeRequestBody.attributes.length === 0 && brazeRequestBody.events.length === 0
-    ) {
+    if (brazeRequestBody.attributes.length === 0 && brazeRequestBody.events.length === 0) {
         return console.log('Nothing to export, event is empty.')
     }
 
